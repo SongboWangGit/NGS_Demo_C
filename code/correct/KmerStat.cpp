@@ -144,9 +144,9 @@ void KmerStat::Update() {
         cnt++;
         cout << cnt << endl;
 
-        if (cnt == 1200000){
-            break;
-        }
+//        if (cnt == 1200000){
+//            break;
+//        }
         if (read.size() != 150){
             continue;
         }

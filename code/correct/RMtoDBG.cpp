@@ -201,34 +201,19 @@ void RMtoDBG::find_overlap(string overlap, vector<uint64_t > &overlap_pos) {
     }
 
 }
-int main(){
-
-    time_t t = time(nullptr);
-//    start_method();
-
-//    string seq = "ATCGT";
-//    unsigned k = 5;
+//int main(){
 //
-//    string kmer = seq.substr(0, k);
-//    uint64_t hVal=0;
-//    hVal = NTF64(kmer.c_str(), k); // initial hash value
+//    time_t t = time(nullptr);
 //
-//    for (size_t i = 0; i < seq.length() - k; i++)
-//    {
-//        hVal = NTF64(hVal, seq[i], seq[i+k], k); // consecutive hash values
-//    }
 //
-//    cout << hVal << endl;
-
-
-    string read = "CTCCAATGCACTCCCTTCCATGAACTTCCATTTTTCCCCACTCCTTT";
-    int n = 3;
-    RMtoDBG rMtoDBG("reunite/final_dbg.txt", 16);
-    rMtoDBG.get_from_file();
-    rMtoDBG.map_read_muti_unitig(read, n);
-
-
-    showMemStat(getpid());
-    double cost_t = time(nullptr) - t;
-    cout << "all time : " << cost_t  << "s" << endl;
-}
+//    string read = "CTCCAATGCACTCCCTTCCATGAACTTCCATTTTTCCCCACTCCTTT";
+//    int n = 3;
+//    RMtoDBG rMtoDBG("reunite/final_dbg.txt", 16);
+//    rMtoDBG.get_from_file();
+//    rMtoDBG.map_read_muti_unitig(read, n);
+//
+//
+//    showMemStat(getpid());
+//    double cost_t = time(nullptr) - t;
+//    cout << "all time : " << cost_t  << "s" << endl;
+//}

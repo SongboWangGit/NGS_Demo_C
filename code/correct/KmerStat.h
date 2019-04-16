@@ -20,6 +20,9 @@
 #include <dirent.h>
 #include <algorithm>
 #include <cmath>
+#include "util/Usage.hpp"
+#include "util/ThreadPool.h"
+
 using namespace std;
 
 class KmerStat{

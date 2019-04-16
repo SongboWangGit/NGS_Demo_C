@@ -20,7 +20,6 @@ CDBG::CDBG(string in_file, uint16_t ks, uint16_t ls, uint16_t t_num) {
     ksize = ks;
     bam_file = hts_open(in_file.c_str(), "r");
     thread_num = t_num;
-    semaphore = Semaphore(thread_num);
 
 
 
@@ -804,7 +803,7 @@ int main(){
 
     time_t t = time(nullptr);
 
-//    start_method();
+    start_method();
 
 //    string seq = "ATCGT";
 //    unsigned k = 5;

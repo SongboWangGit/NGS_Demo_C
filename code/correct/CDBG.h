@@ -10,7 +10,6 @@
 #include <iostream>
 #include <cstdio>
 #include <vector>
-#include "util/Semaphore.h"
 #include <unistd.h>
 #include <algorithm>
 #include <string>
@@ -37,7 +36,6 @@ private:
     samFile *bam_file;
 
     uint16_t thread_num;
-    Semaphore semaphore;
 
     unordered_map<string, string > buckets;
     struct dbg_node{

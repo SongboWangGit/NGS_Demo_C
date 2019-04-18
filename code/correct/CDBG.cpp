@@ -686,13 +686,15 @@ void CDBG::deal_left_lone() {
         auto left_k = left_lone_unitigs.begin();
         auto right_k = right_lone_unitigs.find(left_k->first);
         if (right_k == right_lone_unitigs.end()){
-            if (!left_k->second.right_lone.empty()){
-                right_lone_unitigs[left_k->second.right_lone] = left_k->second;
-            }
-            // 虽然lonely找不到可以glue的node了
-            else {
-                all_file << left_k->second.kmer << endl;
-            }
+//            if (!left_k->second.right_lone.empty()){
+//                right_lone_unitigs[left_k->second.right_lone] = left_k->second;
+//            }
+//            // 虽然lonely找不到可以glue的node了
+//            else {
+//                all_file << left_k->second.kmer << endl;
+//            }
+//            left_lone_unitigs.erase(left_k);
+            all_file << left_k->second.kmer << endl;
             left_lone_unitigs.erase(left_k);
         } else {
             // 找到则合并

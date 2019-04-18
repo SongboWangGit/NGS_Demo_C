@@ -4,6 +4,7 @@
 #include <sstream>
 #include "CDBG.h"
 
+
 //定义，分配内存，以后A每一个对象（实例）的创建都不再分配内存
 unordered_map<string, CDBG::lone_node> CDBG::left_lone_unitigs;
 unordered_map<string, CDBG::lone_node> CDBG::right_lone_unitigs;
@@ -15,13 +16,15 @@ recursive_mutex reunited_lock;
 CDBG::CDBG() {
 
 }
-CDBG::CDBG(string in_file, uint16_t ks, uint16_t ls, uint16_t t_num) {
+CDBG::CDBG(string in_file, uint16_t ks, uint16_t ls, uint16_t t_num, uint8_t thresh, uint8_t r) {
     lsize = ls;
     ksize = ks;
     bam_file = hts_open(in_file.c_str(), "r");
     thread_num = t_num;
-
-
+    this->r = r;
+    uint64_t table_size = uint64_t (pow(2, r));
+    count_table = new uint32_t[table_size] ();
+    threshold = thresh;
 
 }
 
@@ -31,6 +34,7 @@ CDBG::CDBG(CDBG &cdbg) {
     this->ksize = cdbg.ksize;
 
 }
+
 
 /*
  * 函数功能：得到文件夹中所有的文件名
@@ -170,10 +174,24 @@ void CDBG::write_to_buckets(string out_file, string kmer){
 
 }
 
+void CDBG::get_count_table() {
+    ifstream in_file("kmer_count/" + to_string(ksize) + "_stat_table.txt");
+    string str;
+    uint64_t cnt = 0;
+    while (getline(in_file, str)){
+        count_table[cnt] = stoll(str);
+        cnt ++;
+    }
+}
 /*
  * 函数功能：读取bam文件，根据lmm和rmm将kmer分入不同的桶（文件中）
  */
 void CDBG::split_to_buckets() {
+    // 读取统计表，用来过滤kmer
+    get_count_table();
+//    for (int i = 0; i < 50; i++){
+//        cout << count_table[i] << endl;
+//    }
     // 创建桶保存的文件夹
     string save_folder = "buckets";
     // 文件夹存在
@@ -186,6 +204,7 @@ void CDBG::split_to_buckets() {
 
     bam1_t *aln = bam_init1(); //initialize an alignment
     bam_hdr_t *bamHdr = sam_hdr_read(bam_file); //read header
+//    #pragma omp parallel while
     while(sam_read1(bam_file, bamHdr, aln) > 0){
         //获得序列
         int32_t len = aln->core.l_qseq;
@@ -203,14 +222,21 @@ void CDBG::split_to_buckets() {
             // 桶达到一定大小之后才写入文件存储，提高效率
             write_buckets_to_file();
         }
-        if (cnt == 50002){
+        if (cnt == 5002){
             break;
+        }
+        if (read.size() != 150){
+            continue;
         }
 
         // 遍历每一个kmer
-        for (uint32_t i = 0; i < read.size() - ksize + 1; i++){
-            string kmer = read.substr(i, ksize);
+        ntHashIterator itr(read, 1, ksize);
+        int i = 0;
+        while (itr != itr.end()) {
+            uint64_t end_r_bits = (*itr)[0] & uint64_t(pow(2, r) - 1);
 
+//            if (count_table[end_r_bits] > threshold){
+            string kmer = read.substr(i, ksize);
             string kmer_lmm = lmm(kmer, lsize);
             string kmer_rmm = rmm(kmer, lsize);
 
@@ -221,9 +247,11 @@ void CDBG::split_to_buckets() {
                 // 写入桶中
                 write_to_buckets(kmer_rmm, kmer);
             }
+//            }
 
+            ++itr;
+            i++;
         }
-
     }
 }
 
@@ -237,6 +265,7 @@ void CDBG::construct_dbg_with_thread(){
 
     std::vector< std::future<void > > results;
 
+    // 创建文件夹
     string save_folder = "buckets_dbg";
     if (access(save_folder.c_str(), 0) == 0){
         system("rm -rf buckets_dbg");
@@ -286,7 +315,7 @@ void CDBG::construct_dbg_in_bucket(CDBG *p, string file_name) {
 
     // 存储生成的dbg，键值对分别是编号和节点
     unordered_map<uint64_t, dbg_node> bucket_dbg;
-
+    mutex dbg_lock;
     ifstream file(file_path);
 
     // 取出所有kmer
@@ -311,6 +340,7 @@ void CDBG::construct_dbg_in_bucket(CDBG *p, string file_name) {
     }
 
     // 遍历kmer，得到前后节点关系
+    # pragma omp parallel for
     for (int i = 0; i < all_kmers.size(); i++) {
 
         string kmer1 = all_kmers[i];
@@ -318,18 +348,22 @@ void CDBG::construct_dbg_in_bucket(CDBG *p, string file_name) {
         dbg_node* kmer1_node = &bucket_dbg[i];
 
         // 再次遍历这个kmer集，找到他的前面的和后面的节点
-        for (int j = i ; j < all_kmers.size(); j++){
+        for (int j = i + 1; j < all_kmers.size(); j++){
             string kmer2 = all_kmers[j];
 
             dbg_node* kmer2_node = &bucket_dbg[j];
             // 检查是否为邻近节点
             // 1是2的前一个节点
             if (cdbg1.sufix(kmer1, cdbg1.ksize - 1) == cdbg1.prefix(kmer2, cdbg1.ksize - 1)){
+                dbg_lock.lock();
                 kmer1_node->suf_node.emplace_back(j);
                 kmer2_node->pre_node.emplace_back(i);
+                dbg_lock.unlock();
             } else if (cdbg1.prefix(kmer1, cdbg1.ksize - 1) == cdbg1.sufix(kmer2, cdbg1.ksize - 1)){
+                dbg_lock.lock();
                 kmer2_node->suf_node.emplace_back(i);
                 kmer1_node->pre_node.emplace_back(j);
+                dbg_lock.unlock();
 
             }
         }
@@ -652,8 +686,13 @@ void CDBG::deal_left_lone() {
         auto left_k = left_lone_unitigs.begin();
         auto right_k = right_lone_unitigs.find(left_k->first);
         if (right_k == right_lone_unitigs.end()){
-            // 虽然lonely找不到可以glue的node了，此时写入输出文件
-            all_file << left_k->second.kmer << endl;
+            if (!left_k->second.right_lone.empty()){
+                right_lone_unitigs[left_k->second.right_lone] = left_k->second;
+            }
+            // 虽然lonely找不到可以glue的node了
+            else {
+                all_file << left_k->second.kmer << endl;
+            }
             left_lone_unitigs.erase(left_k);
         } else {
             // 找到则合并
@@ -702,6 +741,7 @@ void CDBG::construct_final_dbg() {
     unordered_map<uint64_t, dbg_node> bucket_dbg;
     long int out_file_cnt = 0;
 
+    mutex dbg_lock;
 
     while(getline(file, kmer)) {
 
@@ -722,26 +762,31 @@ void CDBG::construct_final_dbg() {
     }
 
     // 遍历kmer，得到前后节点关系
+    # pragma omp parallel for
     for (int i = 0; i < all_kmers.size(); i++) {
-        cout << i << endl;
-        string kmer1 = all_kmers[i];
 
+        string kmer1 = all_kmers[i];
 
         dbg_node* kmer1_node = &bucket_dbg[i];
 
         // 再次遍历这个kmer集，找到他的前面的和后面的节点
-        for (int j = i ; j < all_kmers.size(); j++){
+        for (int j = i + 1; j < all_kmers.size(); j++){
             string kmer2 = all_kmers[j];
 
             dbg_node* kmer2_node = &bucket_dbg[j];
             // 检查是否为邻近节点
             // 1是2的前一个节点
             if (sufix(kmer1, ksize - 1) == prefix(kmer2, ksize - 1)){
+                dbg_lock.lock();
                 kmer1_node->suf_node.emplace_back(j);
                 kmer2_node->pre_node.emplace_back(i);
+                dbg_lock.unlock();
+
             } else if (prefix(kmer1, ksize - 1) == sufix(kmer2, ksize - 1)){
+                dbg_lock.lock();
                 kmer2_node->suf_node.emplace_back(i);
                 kmer1_node->pre_node.emplace_back(j);
+                dbg_lock.unlock();
 
             }
         }
@@ -788,7 +833,7 @@ void CDBG::write_dbg_to_file(unordered_map<uint64_t , dbg_node> &bucket_dbg, str
 
 void start_method(){
 
-    CDBG cdbg("../../bams/sampleChr20_sorted.bam", 16, 8, 6);
+    CDBG cdbg("../../bams/sampleChr20_sorted.bam", 31, 8, 6, 1, 20);
 
     cdbg.split_to_buckets();
     cdbg.construct_dbg_with_thread();
@@ -805,27 +850,9 @@ int main(){
 
     start_method();
 
-//    string seq = "ATCGT";
-//    unsigned k = 5;
-//
-//    string kmer = seq.substr(0, k);
-//    uint64_t hVal=0;
-//    hVal = NTF64(kmer.c_str(), k); // initial hash value
-//
-//    for (size_t i = 0; i < seq.length() - k; i++)
-//    {
-//        hVal = NTF64(hVal, seq[i], seq[i+k], k); // consecutive hash values
-//    }
-//
-//    cout << hVal << endl;
 
-
-
-//    RMtoDBG rMtoDBG();
-//    rMtoDBG().get_from_file();
     showMemStat(getpid());
     double cost_t = time(nullptr) - t;
     cout << "all time : " << cost_t  << "s" << endl;
 
 }
-

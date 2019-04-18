@@ -47,7 +47,7 @@ uint64_t KmerStat::ten_2_tow(uint64_t n){
 
 
 void KmerStat::write_table_to_file() {
-    ofstream fout("kmer_count/kmer_table.txt");
+    ofstream fout("kmer_count/" + to_string(ksize) + "_stat_table.txt");
 
     for (int i = 0; i < table_size; i++){
         fout << count_table[i] << endl;
@@ -151,7 +151,7 @@ void KmerStat::Update() {
         get_nthash(read);
     }
 
-//    write_table_to_file();
+    write_table_to_file();
 
 }
 
@@ -208,7 +208,7 @@ void kmer_stat_start(string in_file, int ksize, int s, int r){
 }
 void kmer_stat_thread(string in_file, size_t thread_num, int s, int r){
     ThreadPool thread_pool(thread_num);
-    for (int ksize = 21; ksize <=101; ksize += 10){
+    for (int ksize = 21; ksize <=21; ksize += 10){
         thread_pool.enqueue(kmer_stat_start, in_file, ksize, s, r);
     }
 }
@@ -245,9 +245,9 @@ uint64_t choose_ksize(){
         }
         all_hists.emplace_back(kmer_hist);
     }
-    double frac = 1.3;
+    double frac = 1.5;
     // 要求的最大threshold
-    int max_threshold = 2;
+    int max_threshold = 4;
     vector<uint64_t> minimumList;
     bool flag = true;
     for (int i = 0; i < all_hists.size() and flag; i++){
@@ -255,9 +255,6 @@ uint64_t choose_ksize(){
             // 找到第一个曲线回升的点
             if (all_hists[i][j] < all_hists[i][j+1] * frac){
                 // 如果该点大于设置的最大阈值
-//                cout << all_hists[i][j] << " " << all_hists[i][j+1] << endl;
-//                cout << "------------ " << j << endl;
-
                 if (j >= max_threshold){
                     minimumList.emplace_back(j);
                 } else {
@@ -279,8 +276,14 @@ int main(){
     time_t t = time(nullptr);
 
 
-//    kmer_stat_thread("../../bams/sampleChr20_sorted.bam", 8, 8, 20);
-    choose_ksize();
+    kmer_stat_thread("../../bams/sampleChr20_sorted.bam", 8, 8, 20);
+//    choose_ksize();
+
+
+
+
+
+
     showMemStat(getpid());
     double cost_t = time(nullptr) - t;
     cout << "all time : " << cost_t  << "s" << endl;
@@ -288,3 +291,31 @@ int main(){
     return 0;
 }
 
+//2059305643279264546
+//4002849972989571571
+//10734603883336628026
+//7592103851842527473
+//12082256125101519971
+//12074405748320858019
+//5820690352966469219
+//2068712403915188825
+//699393745368268507
+//4243256356426225172
+//2466672507900377332
+//2542203579003691662
+//10311090616886144476
+//14042334078411021906
+//2373580554124515116
+//3815853434472029145
+//11129516728184488114
+//12794091561220286431
+//2887329921683514340
+//11984894193963405062
+//2593640835594254216
+//2882950141656871765
+//4855343938673776149
+//949079697092426865
+//9446680245089259198
+//5479989553695939045
+//2288004137872541840
+//5158847249326826442

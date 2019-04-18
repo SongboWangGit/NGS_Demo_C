@@ -7,6 +7,7 @@
 
 #include "util/Usage.hpp"
 #include "util/nthash.hpp"
+#include "util/ntHashIterator.hpp"
 #include <iostream>
 #include <cstdio>
 #include <vector>
@@ -24,6 +25,7 @@
 #include <cstring>
 #include "util/ThreadPool.h"
 #include <unordered_map>
+#include <cmath>
 using namespace std;
 
 
@@ -36,7 +38,8 @@ private:
     samFile *bam_file;
 
     uint16_t thread_num;
-
+    uint8_t r;
+    uint8_t threshold;
     unordered_map<string, string > buckets;
     struct dbg_node{
         string kmer;
@@ -60,14 +63,14 @@ private:
 
     static unordered_map<string, lone_node> left_lone_unitigs;
     static unordered_map<string, lone_node> right_lone_unitigs;
-
-
+    static unordered_map<string, lone_node> all_lone_unitigs;
+    uint32_t *count_table;
 //    static recursive_mutex left_lone_unitigs_lock;
 //    static recursive_mutex right_lone_unitigs_lock;
 
 public:
     CDBG();
-    CDBG(std::string in_file, uint16_t ks, uint16_t ls, uint16_t thread_num);
+    CDBG(std::string in_file, uint16_t ks, uint16_t ls, uint16_t thread_num, uint8_t thresh, uint8_t r);
     CDBG(CDBG &cdbg);
 
     string lmm(string kmer, int minl);
@@ -75,6 +78,7 @@ public:
     string prefix(string str, uint32_t length);
     string sufix(string str, uint32_t length);
 
+    void get_count_table();
     // 分割kmer到桶中所需要的功能函数
     void write_to_buckets(string out_file, string kmer);
     void write_buckets_to_file();
@@ -105,3 +109,13 @@ public:
 
 };
 #endif //NGS_DEMO_CDBG_H
+
+
+//if (!left_k->second.right_lone.empty()){
+//right_lone_unitigs[left_k->second.right_lone] = left_k->second;
+//}
+//// 虽然lonely找不到可以glue的node了
+//else {
+//all_file << left_k->second.kmer << endl;
+//}
+//left_lone_unitigs.erase(left_k);

@@ -178,12 +178,7 @@ void RMtoDBG::map_read_muti_unitig(string read, int n) {
     }
 
     // start和end都找到才可以继续进行
-    if (start_flag == 1 && end_flag == 1){
 
-    } else {
-
-        return;
-    }
 
 
 }

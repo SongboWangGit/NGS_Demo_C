@@ -222,9 +222,9 @@ void CDBG::split_to_buckets() {
             // 桶达到一定大小之后才写入文件存储，提高效率
             write_buckets_to_file();
         }
-        if (cnt == 5002){
-            break;
-        }
+//        if (cnt == 10002){
+//            break;
+//        }
         if (read.size() != 150){
             continue;
         }
@@ -845,7 +845,7 @@ void start_method(){
 
 
 int main(){
-    //    g++ CDBG.cpp -lhts -pthread -o cdbg
+    //    g++ CDBG.cpp -lhts -pthread -fopenmp -o cdbg
 
 
     time_t t = time(nullptr);

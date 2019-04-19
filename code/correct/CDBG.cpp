@@ -222,9 +222,9 @@ void CDBG::split_to_buckets() {
             // 桶达到一定大小之后才写入文件存储，提高效率
             write_buckets_to_file();
         }
-//        if (cnt == 10002){
-//            break;
-//        }
+        if (cnt == 500002){
+            break;
+        }
         if (read.size() != 150){
             continue;
         }

@@ -11,6 +11,7 @@
 #include <fstream>
 #include <cstdlib>
 #include <unordered_map>
+#include "util/Usage.hpp"
 using namespace std;
 
 class RMtoDBG{
@@ -45,6 +46,7 @@ public:
     void split_string(const std::string& s, std::vector<std::string>& v, const std::string& c);
     void map_read_muti_unitig(string read, int n);
     void find_overlap(string overlap, vector<uint64_t > &overlap_pos);
+    void find_paths(DBG_Node cur_node, string cur_path, unsigned long read_size, vector<string> &map_paths);
 };
 
 #endif //NGS_DEMO_RMTODBG_H

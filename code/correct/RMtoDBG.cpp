@@ -110,9 +110,9 @@ void RMtoDBG::get_from_file() {
                 pre_node.emplace_back(strtoull (pre_node_str[i].c_str(), nullptr, 0));
             }
 
-            if (!pre_node.empty()){
+//            if (!pre_node.empty()){
                 overlap_hash[prefix(kmer, ksize - 1)].emplace_back(node_num);
-            }
+//            }
 
 
             // 获得suf nodes
@@ -126,9 +126,9 @@ void RMtoDBG::get_from_file() {
                 suf_node.emplace_back(strtoull (suf_node_str[i].c_str(), nullptr, 0));
             }
 
-            if (!suf_node.empty()){
+//            if (!suf_node.empty()){
                 overlap_hash[sufix(kmer, ksize - 1)].emplace_back(node_num);
-            }
+//            }
 
 
             DBG_Node cur_node = {kmer, pre_node, suf_node, 0};
@@ -155,34 +155,74 @@ void RMtoDBG::map_read_muti_unitig(string read, int n) {
 
             string start_overlap = read.substr(i, ksize - 1);
             find_overlap(start_overlap, start_overlap_pos);
-
-            // 如果begin 找到了对应的unitig
-            if (!start_overlap_pos.empty()) {
-                start_flag = 1;
-
-                // 开始找end对应的unitig
-                for (int j = 0; j < n; j++){
-                    if (end_flag == 0){
-                        string end_overlap = read.substr(read.size() - ksize + 1 - i, ksize - 1);
-
-                        find_overlap(end_overlap, end_overlap_pos);
-
-                        if (!end_overlap_pos.empty()){
-                            end_flag = 1;
-                            break;
-                        }
-                    }
-                }
+            if (start_overlap_pos.size() != 0){
+                cout << i << endl;
+                break;
             }
+//
+
+//            // 如果begin 找到了对应的unitig
+//            if (!start_overlap_pos.empty()) {
+//                start_flag = 1;
+//
+//                // 开始找end对应的unitig
+//                for (int j = 0; j < n; j++){
+//                    if (end_flag == 0){
+//                        string end_overlap = read.substr(read.size() - ksize + 1 - i, ksize - 1);
+//
+//                        find_overlap(end_overlap, end_overlap_pos);
+//
+//                        if (!end_overlap_pos.empty()){
+//                            end_flag = 1;
+//                            break;
+//                        }
+//                    }
+//                }
+//            }
         }
     }
 
-    // start和end都找到才可以继续进行
+    // 找到一条路径
+    vector<string> map_paths;
 
+    for (int i = 0; i < start_overlap_pos.size(); i++){
+        DBG_Node cur_node = bucket_dbg[start_overlap_pos[i]];
+        vector<uint64_t > pre_nodes = cur_node.pre_node;
+        string cur_path;
+        // 加上前面一个节点来保证冗余，足够长
+//        for (int j = 0; j < pre_nodes.size(); j++){
+//            string cur_path = bucket_dbg[pre_nodes[j]].kmer;
+            // 递归来寻找一条完整的路径
+            find_paths(cur_node, cur_path, read.size(), map_paths);
+//        }
 
+    }
+
+    for (int i = 0; i < map_paths.size(); i ++){
+        cout << "whole path: " << map_paths[i] << endl;
+    }
+//    GCAGCTTGGTGCCTCTGAAAGGGAGAGGGGTGGAGGGGAGACCTCTGAAAGGGAGAGGGGTGGAGGGGAGACTAGAGAGGTGGGTAGGAATGGAGGGGAGACTAGAGAGGTGGGTAGGAATACTGGATTCCACTGACCACGTGCTGGATGTCATGCTTAGCCCTCCT
+//    GGGAATAGACAAGACCACAAGCAGCTTGGTACCTCTGAAAGGGAGAGGGGTGGAGGGGAGACCTCTGAAAGGGAGAGGGGTGGAGGGGAGACTAGAGAGGTGGGTAGGAATGGAGGGGAGACTAGAGAGGTGGGTAGGAATACTGGATTCCACTGACCACGTGCTGGATGTCATGCTTAGCCCTCCT
 
 }
+// 向后找节点加入路径
+void RMtoDBG::find_paths(DBG_Node cur_node, string cur_path, unsigned long read_size, vector<string> &map_paths){
+    vector<uint64_t> suf_nodes = cur_node.suf_node;
 
+    cur_path += cur_node.kmer;
+
+    if (cur_path.size() > read_size){
+        map_paths.emplace_back(cur_path);
+        return;
+    }
+
+    for (int i = 0; i < suf_nodes.size(); i ++){
+        DBG_Node next_node = bucket_dbg[suf_nodes[i]];
+        // 递归来寻找一条完整的路径
+        find_paths(next_node, cur_path, read_size, map_paths);
+    }
+
+}
 void RMtoDBG::find_overlap(string overlap, vector<uint64_t > &overlap_pos) {
 
     overlap_pos.clear();
@@ -191,24 +231,25 @@ void RMtoDBG::find_overlap(string overlap, vector<uint64_t > &overlap_pos) {
     if (overlap_iter != overlap_hash.end()){
         for (int i = 0; i < overlap_iter->second.size(); i++){
             overlap_pos.emplace_back(overlap_iter->second[i]);
-            cout << "---" << overlap_iter->second[i] << endl;
+            cout << "---" << bucket_dbg[overlap_iter->second[i]].kmer << endl;
         }
     }
 
 }
-//int main(){
-//
-//    time_t t = time(nullptr);
-//
-//
-//    string read = "CTCCAATGCACTCCCTTCCATGAACTTCCATTTTTCCCCACTCCTTT";
-//    int n = 3;
-//    RMtoDBG rMtoDBG("reunite/final_dbg.txt", 16);
-//    rMtoDBG.get_from_file();
-//    rMtoDBG.map_read_muti_unitig(read, n);
-//
-//
-//    showMemStat(getpid());
-//    double cost_t = time(nullptr) - t;
-//    cout << "all time : " << cost_t  << "s" << endl;
-//}
+
+int main(){
+
+    time_t t = time(nullptr);
+
+
+    string read = "GAAAGGGAGAGGGGTGGAGGGGAGACTAGAGAGGTGGGTAGGAATACTGGATTCCACTGACCACGTGCTGGATGTCATGCTTAGCCCTCCTGCTCTGTGCCAGGTTAGGCACCTGGTGTTTTACATATATTATATTACATTCTATTACAG";
+    int n = 13;
+    RMtoDBG rMtoDBG("reunite/final_dbg.txt", 16);
+    rMtoDBG.get_from_file();
+    rMtoDBG.map_read_muti_unitig(read, n);
+
+
+    showMemStat(getpid());
+    double cost_t = time(nullptr) - t;
+    cout << "all time : " << cost_t  << "s" << endl;
+}

@@ -173,6 +173,7 @@ void RMtoDBG::map_read_muti_unitig(string read) {
 
             start_overlap = read.substr(i, ksize - 1);
             find_overlap(start_overlap, start_overlap_in_dbg_poses);
+//            cout << start_overlap_in_dbg_poses.size() << endl;
             if (not start_overlap_in_dbg_poses.empty()){
 //                cout << start_overlap << endl;
                 start_overlap_in_read_pos = i;
@@ -207,21 +208,32 @@ void RMtoDBG::map_read_muti_unitig(string read) {
             DBG_Node cur_node = bucket_dbg[start_overlap_in_dbg_poses[i]];
             vector<uint64_t > pre_nodes = cur_node.pre_node;
             string cur_path;
-            // 加上前面一个节点来保证冗余，足够长
-            for (int j = 0; j < pre_nodes.size(); j++){
-                string cur_path = bucket_dbg[pre_nodes[j]].kmer;
-                // 递归来寻找一条完整的路径
-                find_all_paths(cur_node, cur_path, read.size(), all_map_paths);
-            }
+
+            find_all_paths(cur_node, cur_path, read.size(), all_map_paths);
+//            if (pre_nodes.empty()){
+//                find_all_paths(cur_node, cur_path, read.size(), all_map_paths);
+//            } else {
+//                // 加上前面一个节点来保证冗余，足够长
+//                for (int j = 0; j < pre_nodes.size(); j++){
+//                    cur_path = bucket_dbg[pre_nodes[j]].kmer;
+//                    // 递归来寻找一条完整的路径
+//                    find_all_paths(cur_node, cur_path, read.size(), all_map_paths);
+//                }
+//
+//            }
 
         }
 
+        string trimed_read = read.substr(start_overlap_in_read_pos);
+        cout << trimed_read << endl;
         set<string> all_trimed_paths;
         trim_paths(all_map_paths, all_trimed_paths, start_overlap, start_overlap_in_read_pos, read_size);
-        for(auto it = all_trimed_paths.begin (); it != all_trimed_paths.end ();it++){
-            cout << "trimed path: " << *it << endl;
-
-        }
+//        for(auto it = all_trimed_paths.begin (); it != all_trimed_paths.end ();it++){
+//            cout << "trimed path: " << *it << endl;
+//        }
+        string best_path = find_best_path(trimed_read, all_trimed_paths);
+        cout << best_path << endl;
+        cout << all_trimed_paths.size() << endl;
 
     }
 
@@ -259,9 +271,12 @@ void RMtoDBG::find_all_paths(DBG_Node cur_node, string cur_path, unsigned long r
 void RMtoDBG::trim_paths(vector<string> all_map_paths, set<string> &all_trimed_paths, string start_overlap, uint64_t start_overlap_in_read_pos, int read_len) {
 
     for (int i = 0; i < all_map_paths.size(); i++){
-//         cout << "whole path: " << all_map_paths[i] << endl;
 
         string cur_path = all_map_paths[i];
+        if (cur_path.size() < read_len){
+            all_trimed_paths.insert(cur_path);
+            continue;
+        }
         // 从overlap在path上的位置开始修剪
         unsigned long trim_pos = cur_path.find(start_overlap);
         // 加上前半段
@@ -275,20 +290,73 @@ void RMtoDBG::trim_paths(vector<string> all_map_paths, set<string> &all_trimed_p
 
 }
 
+/*
+ * 函数功能：从所有修剪过得path中找到错配数最小的路径，并输出
+ */
+string RMtoDBG::find_best_path(string trimed_read, set<string> all_trimed_paths) {
+
+    int min_mismatch = 200;
+    string min_path;
+
+
+    for(auto it = all_trimed_paths.begin (); it != all_trimed_paths.end ();it++){
+        int cur_mismatch = 0;
+        string cur_path = *it;
+
+        for (int i = 0; i < trimed_read.size(); i++){
+            if (trimed_read[i] != cur_path[i]){
+                cur_mismatch ++;
+            }
+
+            if (cur_mismatch < min_mismatch){
+                min_mismatch = cur_mismatch;
+                min_path = *it;
+            }
+        }
+    }
+
+    return min_path;
+
+}
+
 int main(){
 
     time_t t = time(nullptr);
 
-
-    string read = "GAAAGGGAGAGGGGTGGAGGGGAGACTAGAGAGGTGGGTAGGAATACTGGATTCCACTGACCACGTGCTGGATGTCATGCTTAGCCCTCCTGCTCTGTGCCAGGTTAGGCACCTGGTGTTTTACATATATTATATTACATTCTATTACAG";
-    int max_step = 20;
+    int max_step = 70;
     RMtoDBG rMtoDBG("reunite/final_dbg.txt", 31, max_step);
     rMtoDBG.get_from_file();
-    rMtoDBG.map_read_muti_unitig(read);
 
+    uint64_t cnt = 0;
+    string in_file = "../../bams/sampleChr20_sorted.bam";
+    samFile *bam_file = hts_open(in_file.c_str(), "r");
+    bam1_t *aln = bam_init1(); //initialize an alignment
+    bam_hdr_t *bamHdr = sam_hdr_read(bam_file); //read header
+    while(sam_read1(bam_file, bamHdr, aln) > 0) {
+        //获得序列
+        int32_t len = aln->core.l_qseq;
+        uint8_t *q = bam_get_seq(aln);
+        string read;
+        for (int i = 0; i < len; i++) {
+            read += seq_nt16_str[bam_seqi(q, i)];
+        }
+
+        if (read.size() != 150){
+            continue;
+        }
+        read = read.substr(0, 80);
+        rMtoDBG.map_read_muti_unitig(read);
+
+        cnt ++;
+        if (cnt == 5){
+            cout << "tot: " << cnt << endl;
+            break;
+        }
+
+    }
 
     showMemStat(getpid());
     double cost_t = time(nullptr) - t;
     cout << "all time : " << cost_t  << "s" << endl;
+
 }
-// hahahah

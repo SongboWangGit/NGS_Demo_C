@@ -13,6 +13,9 @@
 #include <unordered_map>
 #include "util/Usage.hpp"
 #include <set>
+#include <htslib/sam.h>
+#include <htslib/hts.h>
+
 using namespace std;
 
 class RMtoDBG{
@@ -52,6 +55,7 @@ public:
     void find_all_paths(DBG_Node cur_node, string cur_path, unsigned long read_size, vector<string> &map_paths);
 
     void trim_paths(vector<string> all_map_paths, set<string> &all_trimed_paths, string start_str, uint64_t start_overlap_in_read_pos, int read_len);
+    string find_best_path(string trimed_read, set<string> all_trimed_path);
 };
 
 #endif //NGS_DEMO_RMTODBG_H

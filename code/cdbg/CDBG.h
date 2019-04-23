@@ -110,12 +110,3 @@ public:
 };
 #endif //NGS_DEMO_CDBG_H
 
-
-//if (!left_k->second.right_lone.empty()){
-//right_lone_unitigs[left_k->second.right_lone] = left_k->second;
-//}
-//// 虽然lonely找不到可以glue的node了
-//else {
-//all_file << left_k->second.kmer << endl;
-//}
-//left_lone_unitigs.erase(left_k);

@@ -51,7 +51,7 @@ class FindCandidateErr():
         out_file = open("err_info.txt", 'w')
         for item in self.err_pos_dict.keys():
             out_file.write(str(item))
-            out_file.write(": ")
+            out_file.write(" ")
             for s in self.err_pos_dict[item]:
                 out_file.write(s)
                 out_file.write(" ")

@@ -6,10 +6,11 @@
 #include "util/nthash.hpp"
 #include <unistd.h>
 
-RMtoDBG::RMtoDBG(string file_name, uint16_t k, int m_step) {
-    cdbg_file_path = file_name;
+RMtoDBG::RMtoDBG(string cdbg_file, uint16_t k, int m_step, string err_file) {
+    cdbg_file_path = cdbg_file;
     ksize = k;
     max_step = m_step;
+    err_info_path = err_file;
 }
 //RMtoDBG::RMtoDBG(map<string, uint64_t> h) {
 //    this->overlap_hash = h;
@@ -156,48 +157,25 @@ void RMtoDBG::find_overlap(string overlap, vector<uint64_t > &overlap_pos) {
     }
 }
 
-void RMtoDBG::map_read_muti_unitig(string read) {
+string RMtoDBG::map_read_muti_unitig(string read, uint64_t &start_overlap_in_read_pos) {
 //    cout << "all: " << overlap_hash.size() << endl;
     int start_flag = 0;
     int end_flag = 0;
 
     vector<uint64_t > start_overlap_in_dbg_poses;
     vector<uint64_t > end_overlap_pos;
-    uint64_t start_overlap_in_read_pos;
+
 
     int read_size = read.size();
     string start_overlap;
 
     for (int i = 0; i < max_step; i++){
-//        if (start_flag == 0){
-
-            start_overlap = read.substr(i, ksize - 1);
-            find_overlap(start_overlap, start_overlap_in_dbg_poses);
-//            cout << start_overlap_in_dbg_poses.size() << endl;
-            if (not start_overlap_in_dbg_poses.empty()){
-//                cout << start_overlap << endl;
-                start_overlap_in_read_pos = i;
-                break;
-            }
-//            // 如果begin 找到了对应的unitig
-//            if (!start_overlap_pos.empty()) {
-//                start_flag = 1;
-//
-//                // 开始找end对应的unitig
-//                for (int j = 0; j < n; j++){
-//                    if (end_flag == 0){
-//                        string end_overlap = read.substr(read.size() - ksize + 1 - i, ksize - 1);
-//
-//                        find_overlap(end_overlap, end_overlap_pos);
-//
-//                        if (!end_overlap_pos.empty()){
-//                            end_flag = 1;
-//                            break;
-//                        }
-//                    }
-//                }
-//            }
-//        }
+        start_overlap = read.substr(i, ksize - 1);
+        find_overlap(start_overlap, start_overlap_in_dbg_poses);
+        if (not start_overlap_in_dbg_poses.empty()){
+            start_overlap_in_read_pos = i;
+            break;
+        }
     }
 
     // 找到所有可能的路径
@@ -225,17 +203,17 @@ void RMtoDBG::map_read_muti_unitig(string read) {
         }
 
         string trimed_read = read.substr(start_overlap_in_read_pos);
-        cout << trimed_read << endl;
+
         set<string> all_trimed_paths;
         trim_paths(all_map_paths, all_trimed_paths, start_overlap, start_overlap_in_read_pos, read_size);
-//        for(auto it = all_trimed_paths.begin (); it != all_trimed_paths.end ();it++){
-//            cout << "trimed path: " << *it << endl;
-//        }
-        string best_path = find_best_path(trimed_read, all_trimed_paths);
-        cout << best_path << endl;
-        cout << all_trimed_paths.size() << endl;
 
+        string best_path = find_best_path(trimed_read, all_trimed_paths);
+
+
+        return best_path;
     }
+
+    return "";
 
 }
 
@@ -319,41 +297,116 @@ string RMtoDBG::find_best_path(string trimed_read, set<string> all_trimed_paths)
 
 }
 
+void RMtoDBG::correct(string best_path, vector<string> err_segment, uint64_t err_pos, uint64_t bias) {
+
+    ofstream err_correction("err_correction.txt", ios::app);
+    err_correction << err_pos << " " << best_path;
+
+    for (int i = 0; i < err_segment.size(); i ++){
+        vector<Correct_Pair> correction;
+
+        string cur_err_segment = err_segment[i];
+
+        // 遍历每一条，每一条的纠正量大于阈值，则丢弃
+        for (int j = 0; j < best_path.size() and correction.size() <= 5; j++){
+            if (cur_err_segment[j] != best_path[j]){
+                uint64_t err_bp_pos = err_pos + bias + j;
+                Correct_Pair new_correct = {err_bp_pos, cur_err_segment[j], best_path[j]};
+                correction.emplace_back(new_correct);
+            }
+        }
+
+        //每一条的纠正量大于阈值，则丢弃, 否则将更改写入文件
+        if (correction.size() >= 5){
+            continue;
+        } else if (correction.empty()) {
+            err_correction << " None";
+//            continue;
+        }else {
+                err_correction << " " << cur_err_segment << ":";
+                for (int k = 0; k < correction.size(); k++){
+                    err_correction << " " << correction[k].pos << "-" << correction[k].wrong_bp << "->" << correction[k].right_bp;
+                }
+        }
+
+    }
+    err_correction << endl;
+    err_correction.close();
+}
+void RMtoDBG::map_start() {
+    ifstream err_file(err_info_path);
+    string line;
+
+    // 创建输出文件
+    ofstream err_correction("err_correction.txt");
+    err_correction.close();
+
+    while (getline(err_file, line)){
+        vector<string> line_split;
+        split_string(line, line_split, " ");
+
+        vector<string> err_segment;
+        err_segment.reserve(line_split.size() - 1);
+        uint64_t err_pos = stoll(line_split[0]);
+
+        for (int i = 1; i < line_split.size(); i ++){
+            err_segment.emplace_back(line_split[i]);
+        }
+
+        uint64_t start_overlap_in_read_pos = 0;
+
+        string best_path = map_read_muti_unitig(err_segment[0], start_overlap_in_read_pos);
+
+        if (not best_path.empty()){
+            for (int i = 0; i < err_segment.size(); i ++){
+                err_segment[i] = err_segment[i].substr(start_overlap_in_read_pos);
+            }
+
+            correct(best_path, err_segment, err_pos, start_overlap_in_read_pos);
+            cout << best_path << endl;
+
+        }
+
+
+//        break;
+    }
+}
 int main(){
 
     time_t t = time(nullptr);
 
-    int max_step = 70;
-    RMtoDBG rMtoDBG("reunite/final_dbg.txt", 31, max_step);
+    int max_step = 20;
+    RMtoDBG rMtoDBG("reunite/final_dbg.txt", 31, max_step, "err_info.txt");
     rMtoDBG.get_from_file();
-
-    uint64_t cnt = 0;
-    string in_file = "../../bams/sampleChr20_sorted.bam";
-    samFile *bam_file = hts_open(in_file.c_str(), "r");
-    bam1_t *aln = bam_init1(); //initialize an alignment
-    bam_hdr_t *bamHdr = sam_hdr_read(bam_file); //read header
-    while(sam_read1(bam_file, bamHdr, aln) > 0) {
-        //获得序列
-        int32_t len = aln->core.l_qseq;
-        uint8_t *q = bam_get_seq(aln);
-        string read;
-        for (int i = 0; i < len; i++) {
-            read += seq_nt16_str[bam_seqi(q, i)];
-        }
-
-        if (read.size() != 150){
-            continue;
-        }
-        read = read.substr(0, 80);
-        rMtoDBG.map_read_muti_unitig(read);
-
-        cnt ++;
-        if (cnt == 5){
-            cout << "tot: " << cnt << endl;
-            break;
-        }
-
-    }
+    rMtoDBG.map_start();
+//
+//    uint64_t cnt = 0;
+//    string in_file = "../../bams/sampleChr20_sorted.bam";
+//    samFile *bam_file = hts_open(in_file.c_str(), "r");
+//    bam1_t *aln = bam_init1(); //initialize an alignment
+//    bam_hdr_t *bamHdr = sam_hdr_read(bam_file); //read header
+//    while(sam_read1(bam_file, bamHdr, aln) > 0) {
+//        //获得序列
+//        int32_t len = aln->core.l_qseq;
+//        uint8_t *q = bam_get_seq(aln);
+//        string read;
+//        for (int i = 0; i < len; i++) {
+//            read += seq_nt16_str[bam_seqi(q, i)];
+//        }
+//
+//        if (read.size() != 150){
+//            continue;
+//        }
+//        read = read.substr(30, 40);
+//        rMtoDBG.map_read_muti_unitig(read);
+//
+//        cnt ++;
+//        if (cnt == 15){
+//            cout << "tot: " << cnt << endl;
+//            break;
+//        }
+//
+//    }
 
     showMemStat(getpid());
     double cost_t = time(nullptr) - t;

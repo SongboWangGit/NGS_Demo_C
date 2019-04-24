@@ -42,6 +42,7 @@ private:
     unordered_map<int, int> t;
 
     unordered_map<string, vector<uint64_t> > overlap_hash;
+    unordered_map<string, vector<uint64_t >> unitig_hash;
     string cdbg_file_path;
     string err_info_path;
 
@@ -57,6 +58,8 @@ public:
     void write_dbg_to_file(unordered_map<uint64_t, DBG_Node>& bucket_dbg, string file_name);
 
     void split_string(const std::string& s, std::vector<std::string>& v, const std::string& c);
+    string map_read_single_unitig(string read, uint64_t &start_overlap_in_read_pos);
+
     string map_read_muti_unitig(string read, uint64_t &start_overlap_in_read_pos);
     void find_overlap(string overlap, vector<uint64_t > &overlap_pos);
     void find_all_paths(DBG_Node cur_node, string cur_path, unsigned long read_size, vector<string> &map_paths);

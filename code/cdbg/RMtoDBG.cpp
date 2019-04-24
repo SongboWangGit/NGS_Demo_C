@@ -98,42 +98,49 @@ void RMtoDBG::get_from_file() {
 
             node_num = strtoull (split_line[0].c_str(), nullptr, 0);
             //获得kmer
-            string kmer;
-            getline(cDBG_file, kmer);
+            string unitig;
+            getline(cDBG_file, unitig);
+
+            //针对每个节点的每个kmer，建立索引表
+            for (int i = 0; i < unitig.size() - ksize; i++){
+                string cur_kmer = unitig.substr(i, ksize);
+                unitig_hash[cur_kmer].emplace_back(node_num);
+            }
 
             // 获得pre nodes
             vector<string> pre_node_str;
+            split_string(split_line[1], pre_node_str, ":");
+            pre_node_str.erase(pre_node_str.begin());
+
             vector<uint64_t > pre_node;
             pre_node.reserve(pre_node_str.size());
 
-            split_string(split_line[1], pre_node_str, ":");
-            pre_node_str.erase(pre_node_str.begin());
             for (int i = 0; i < pre_node_str.size(); i ++){
                 pre_node.emplace_back(strtoull (pre_node_str[i].c_str(), nullptr, 0));
             }
 
 //            if (!pre_node.empty()){
-                overlap_hash[prefix(kmer, ksize - 1)].emplace_back(node_num);
+                overlap_hash[prefix(unitig, ksize - 1)].emplace_back(node_num);
 //            }
 
 
             // 获得suf nodes
             vector<string> suf_node_str;
-            vector<uint64_t > suf_node;
-            suf_node.reserve(suf_node_str.size());
-
             split_string(split_line[2], suf_node_str, ":");
             suf_node_str.erase(suf_node_str.begin());
+
+            vector<uint64_t > suf_node;
+            suf_node.reserve(suf_node_str.size());
             for (int i = 0; i < suf_node_str.size(); i++){
-                suf_node.emplace_back(strtoull (suf_node_str[i].c_str(), nullptr, 0));
+                suf_node.emplace_back(strtoull(suf_node_str[i].c_str(), nullptr, 0));
             }
 
 //            if (!suf_node.empty()){
-                overlap_hash[sufix(kmer, ksize - 1)].emplace_back(node_num);
+                overlap_hash[sufix(unitig, ksize - 1)].emplace_back(node_num);
 //            }
 
 
-            DBG_Node cur_node = {kmer, pre_node, suf_node, 0};
+            DBG_Node cur_node = {unitig, pre_node, suf_node, 0};
 
             bucket_dbg[node_num] = cur_node;
 
@@ -157,6 +164,54 @@ void RMtoDBG::find_overlap(string overlap, vector<uint64_t > &overlap_pos) {
     }
 }
 
+string RMtoDBG::map_read_single_unitig(string read, uint64_t &start_kmer_in_read_pos) {
+    vector<uint64_t > kmer_pos_in_dbg;
+    string find_kmer;
+    for (int i = 0; i < read.size() - ksize; i++){
+        find_kmer = read.substr(i, ksize);
+
+        auto kmer_iter = unitig_hash.find(find_kmer);
+
+        if (kmer_iter != unitig_hash.end()){
+            for (int j = 0; j < kmer_iter->second.size(); j++){
+                kmer_pos_in_dbg.emplace_back(kmer_iter->second[i]);
+            }
+
+            start_kmer_in_read_pos = i;
+            break;
+        }
+    }
+
+
+    if (kmer_pos_in_dbg.empty()){
+        return "";
+    } else {
+        int read_left_size = read.size() - start_kmer_in_read_pos;
+//        cout << read.substr(start_kmer_in_read_pos) << endl;
+        // 找到所有的path
+        set<string> all_trimed_paths;
+        for (int i = 0; i < kmer_pos_in_dbg.size(); i ++){
+            string cur_unitig = bucket_dbg[kmer_pos_in_dbg[i]].kmer;
+
+            unsigned long int cut_pos = cur_unitig.find(find_kmer);
+            // 找到
+            string cur_path = cur_unitig.substr(cut_pos);
+            if (cur_path.size() < read_left_size){
+                continue;
+            } else {
+                cur_path = cur_unitig.substr(cut_pos, read_left_size);
+                all_trimed_paths.insert(cur_path);
+//                cout << "--" << cur_path << endl;
+            }
+        }
+
+        // 找到最好的路径
+        string best_path = find_best_path(read.substr(start_kmer_in_read_pos), all_trimed_paths);
+
+        return best_path;
+
+    }
+}
 string RMtoDBG::map_read_muti_unitig(string read, uint64_t &start_overlap_in_read_pos) {
 //    cout << "all: " << overlap_hash.size() << endl;
     int start_flag = 0;
@@ -320,13 +375,13 @@ void RMtoDBG::correct(string best_path, vector<string> err_segment, uint64_t err
         if (correction.size() >= 5){
             continue;
         } else if (correction.empty()) {
-            err_correction << " None";
-//            continue;
+//            err_correction << " None";
+            continue;
         }else {
-                err_correction << " " << cur_err_segment << ":";
-                for (int k = 0; k < correction.size(); k++){
-                    err_correction << " " << correction[k].pos << "-" << correction[k].wrong_bp << "->" << correction[k].right_bp;
-                }
+            err_correction << " " << cur_err_segment << ":";
+            for (int k = 0; k < correction.size(); k++){
+                err_correction << " " << correction[k].pos << "-" << correction[k].wrong_bp << "->" << correction[k].right_bp;
+            }
         }
 
     }
@@ -340,8 +395,12 @@ void RMtoDBG::map_start() {
     // 创建输出文件
     ofstream err_correction("err_correction.txt");
     err_correction.close();
-
+    int cnt = 0;
     while (getline(err_file, line)){
+//        cnt ++;
+//        if (cnt > 3){
+//            break;
+//        }
         vector<string> line_split;
         split_string(line, line_split, " ");
 
@@ -353,18 +412,27 @@ void RMtoDBG::map_start() {
             err_segment.emplace_back(line_split[i]);
         }
 
+        // 先跨节点寻找
         uint64_t start_overlap_in_read_pos = 0;
-
         string best_path = map_read_muti_unitig(err_segment[0], start_overlap_in_read_pos);
-
         if (not best_path.empty()){
             for (int i = 0; i < err_segment.size(); i ++){
                 err_segment[i] = err_segment[i].substr(start_overlap_in_read_pos);
             }
 
             correct(best_path, err_segment, err_pos, start_overlap_in_read_pos);
-            cout << best_path << endl;
+        }
+        // 跨节点没有找到，则从map到单个节点
+        else {
+            uint64_t start_kmer_in_read_pos = 0;
+            string best_path = map_read_single_unitig(err_segment[0], start_kmer_in_read_pos);
+            if (not best_path.empty()){
+                for (int i = 0; i < err_segment.size(); i ++){
+                    err_segment[i] = err_segment[i].substr(start_kmer_in_read_pos);
+                }
 
+                correct(best_path, err_segment, err_pos, start_kmer_in_read_pos);
+            }
         }
 
 
@@ -379,7 +447,7 @@ int main(){
     RMtoDBG rMtoDBG("reunite/final_dbg.txt", 31, max_step, "err_info.txt");
     rMtoDBG.get_from_file();
     rMtoDBG.map_start();
-//
+
 //    uint64_t cnt = 0;
 //    string in_file = "../../bams/sampleChr20_sorted.bam";
 //    samFile *bam_file = hts_open(in_file.c_str(), "r");

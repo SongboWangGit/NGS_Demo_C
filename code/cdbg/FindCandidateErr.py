@@ -2,10 +2,11 @@
 import pysam
 
 class FindCandidateErr():
-    def __init__(self, file):
+    def __init__(self, file, seg_size):
         self.in_file = file
         self.bam_file = pysam.AlignmentFile(self.in_file, 'rb')
-
+        self.segment_size = seg_size
+        self.half_seg_size = int(self.segment_size / 2)
         self.err_pos_dict = {}
 
     def judge_read1_or_2(self, flag):
@@ -28,9 +29,9 @@ class FindCandidateErr():
         err_pos_on_ref = err_pos + read_pos
         # 找是否在已有范围内
         for key in self.err_pos_dict.keys():
-            if err_pos_on_ref >= key - 20 and err_pos_on_ref <= key + 20:
-                start_cut = err_pos - (20 - (key - err_pos_on_ref))
-                end_cut = err_pos + (40 - (20 - (key - err_pos_on_ref)))
+            if err_pos_on_ref >= key - self.half_seg_size and err_pos_on_ref <= key + self.half_seg_size:
+                start_cut = err_pos - (self.half_seg_size - (key - err_pos_on_ref))
+                end_cut = err_pos + (self.segment_size - (self.half_seg_size - (key - err_pos_on_ref)))
                 if start_cut < 0:
                     flag = 0
                     break
@@ -42,7 +43,7 @@ class FindCandidateErr():
         # 不在已有范围内
         if flag == 1:
             self.err_pos_dict[err_pos_on_ref] = []
-            err_segment = read[err_pos - 20: err_pos + 20]
+            err_segment = read[err_pos - self.half_seg_size: err_pos + self.half_seg_size]
             self.err_pos_dict[err_pos_on_ref].append(err_segment)
 
 
@@ -95,7 +96,7 @@ class FindCandidateErr():
 
 
 
-            for i in range(20, len(qual)- 20):
+            for i in range(self.half_seg_size, len(qual)- self.half_seg_size):
                 if qual[i] < 27:
                     self.check_and_merge(i, read, read_pos)
 
@@ -105,5 +106,6 @@ class FindCandidateErr():
 
 if __name__ == '__main__':
     in_file = "../../bams/sampleChr20_sorted.bam"
-    find_err_pos = FindCandidateErr(in_file)
+    segment_size = 40
+    find_err_pos = FindCandidateErr(in_file, segment_size)
     find_err_pos.find_err_pos()

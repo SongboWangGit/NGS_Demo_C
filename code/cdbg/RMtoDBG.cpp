@@ -443,38 +443,12 @@ int main(){
 
     time_t t = time(nullptr);
 
+
     int max_step = 20;
     RMtoDBG rMtoDBG("reunite/final_dbg.txt", 31, max_step, "err_info.txt");
     rMtoDBG.get_from_file();
     rMtoDBG.map_start();
 
-//    uint64_t cnt = 0;
-//    string in_file = "../../bams/sampleChr20_sorted.bam";
-//    samFile *bam_file = hts_open(in_file.c_str(), "r");
-//    bam1_t *aln = bam_init1(); //initialize an alignment
-//    bam_hdr_t *bamHdr = sam_hdr_read(bam_file); //read header
-//    while(sam_read1(bam_file, bamHdr, aln) > 0) {
-//        //获得序列
-//        int32_t len = aln->core.l_qseq;
-//        uint8_t *q = bam_get_seq(aln);
-//        string read;
-//        for (int i = 0; i < len; i++) {
-//            read += seq_nt16_str[bam_seqi(q, i)];
-//        }
-//
-//        if (read.size() != 150){
-//            continue;
-//        }
-//        read = read.substr(30, 40);
-//        rMtoDBG.map_read_muti_unitig(read);
-//
-//        cnt ++;
-//        if (cnt == 15){
-//            cout << "tot: " << cnt << endl;
-//            break;
-//        }
-//
-//    }
 
     showMemStat(getpid());
     double cost_t = time(nullptr) - t;
